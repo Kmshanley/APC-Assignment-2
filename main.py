@@ -1,14 +1,9 @@
-classRegistry = dict()
-userRegistry = dict()
-maxID = 1
+from hmac import digest
+import sqlite3
+import hashlib
 
-class course():
-    def __init__(self) -> None:
-        self.crn
-        self.startTime
-        self.endTime
-        self.remainingCapacity
-        self.presidingInstructor
+maxID = 1
+dbCursor = None #will be assigned in main
 
 class user():
     def __init__(self, fname, lname, id):
@@ -30,10 +25,6 @@ class student(user):
     def __init__(self, fname, lname, id):
         super().__init__(fname, lname, id)
         self.schedule = list()
-
-    def __init__(self, fname, lname, id, schedule):
-        super().__init__(fname, lname, id)
-        self.schedule = schedule
 
     def addClass(self, crn):
         self.schedule.append(crn)
@@ -64,41 +55,100 @@ class admin(user):
         super().__init__(fname, lname, id)
 
     def sysAddCourse(self, crs):
-        classRegistry.update({crs.crn : crs})
+        pass
 
-    def sysRemoveCourse(self, crn):
-        classRegistry.pop(crn)
+    def sysRemoveCourse(self):
+        crn = input("Enter crn number to delete: ")
+        dbCursor.execute("""DELETE FROM COURSE WHERE CRN = ?;""", (crn))
 
     def sysAddUser(self, user):
-        userRegistry.update({user.id : user})
+        pass
 
     def sysRemoveUser(slef, userID):
-        userRegistry.pop(userID)
+        pass
 
 if __name__ == "__main__" :
+    db = sqlite3.connect('database.db')
+    dbCursor = db.cursor()
+
+    try:
+        dbCursor.execute("""CREATE TABLE COURSE ( CRN INTEGER PRIMARY KEY, TITLE TEXT, DEPARTMENT TEXT, TIME TEXT, DAYSOFWEEK TEXT, SEMESTER TEXT, YEAR INTEGER, CREDITS INTEGER);""")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        dbCursor.execute("""CREATE TABLE ADMIN ( USERID INTEGER PRIMARY KEY, FNAME TEXT, LNAME TEXT, PASSWORDHASH BLOB);""")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        dbCursor.execute("""CREATE TABLE STUDENT ( USERID INTEGER PRIMARY KEY, FNAME TEXT, LNAME TEXT, PASSWORDHASH BLOB);""")
+    except sqlite3.OperationalError:
+        pass
+        
+    try:
+        dbCursor.execute("""CREATE TABLE INSTRUCTOR ( USERID INTEGER PRIMARY KEY, FNAME TEXT, LNAME TEXT, PASSWORDHASH BLOB);""")
+    except sqlite3.OperationalError:
+        pass
+
+
     print("Welcome to this scheduling system")
 
-    name = input("Please enter your first name and last name: ")
+    notAuth = True
 
-    name = name.split(" ", 2)
+    while notAuth:
+        name = input("Please enter your first name and last name: ")
+        name = name.split(" ", 2)
 
-    print("1. Student")
-    print("2. Instructor")
-    print("3. Admin")
-    userSelect = input("Enter your user from the above options selection: ")
+        print("1. Student")
+        print("2. Instructor")
+        print("3. Admin")
+        userSelect = input("Enter your user from the above options selection: ")
 
-    if (userSelect == "1"):
-        newUser = student(name[0], name[1], maxID)
-    elif (userSelect == "2"):
-        newUser = instructor(name[0], name[1], maxID)
-    elif (userSelect == "3"):
-        newUser = admin(name[0], name[1], maxID)
-    else: 
-        newUser = None
-    maxID += 1
+        psdhash = hashlib.sha256()
+        password = input("Enter your password: ")
+        psdhash.update(bytes(password, 'utf-8'))
 
-    print(newUser)
-    userRegistry.update({newUser.id : newUser})
+        if (userSelect == "1"):
+            dbCursor.execute("""SELECT PASSWORDHASH, USERID FROM STUDENT WHERE FNAME = ? AND LNAME = ?;""", (name[0], name[1]))
+            search = dbCursor.fetchall()
+
+            if len(search) == 0:
+                print("User does not exist in this system")
+            else:
+                if (search[0] == psdhash.digest()):
+                    newUser = student(name[0], name[1], maxID)
+                    notAuth = False #user is now authorized
+                else:
+                    print("Wrong password")
+
+        elif (userSelect == "2"):
+            dbCursor.execute("""SELECT PASSWORDHASH, USERID FROM INSTRUCTOR WHERE FNAME = ? AND LNAME = ?;""", (name[0], name[1]))
+            search = dbCursor.fetchall()
+
+            if len(search) == 0:
+                print("User does not exist in this system")
+            else:
+                if (search[0] == psdhash.digest()):
+                    newUser = instructor(name[0], name[1], maxID)
+                    notAuth = False #user is now authorized
+                else:
+                    print("Wrong password")
+
+        elif (userSelect == "3"):
+            dbCursor.execute("""SELECT PASSWORDHASH, USERID FROM ADMIN WHERE FNAME = ? AND LNAME = ?;""", (name[0], name[1]))
+            search = dbCursor.fetchall()
+
+            if len(search) == 0:
+                print("User does not exist in this system")
+            else:
+                if (search[0] == psdhash.digest()):
+                    newUser = admin(name[0], name[1], maxID)
+                    notAuth = False #user is now authorized
+                else:
+                    print("Wrong password")
+        else: 
+            newUser = None
 
     #string list of all methods in the user's chosen class
     method_list = [attribute for attribute in dir(newUser) if callable(getattr(newUser, attribute)) and attribute.startswith('__') is False]
@@ -115,4 +165,7 @@ if __name__ == "__main__" :
         cmdNum -= 1
 
         #execute chosen method
-        getattr(newUser, method_list[cmdNum])()
+        try: 
+            getattr(newUser, method_list[cmdNum])()
+        except IndexError:
+            print("Command Selection out of range, try again")
