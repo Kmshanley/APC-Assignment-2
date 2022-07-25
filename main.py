@@ -1,4 +1,3 @@
-from hmac import digest
 import sqlite3
 import hashlib
 
@@ -12,11 +11,20 @@ class user():
         self.id = id
 
     def getName(self) -> str:
+        print ("------Name-----")
         print (self.fname + " " + self.lname)
+        print ("----------------")
         return self.fname + " " + self.lname
 
     def searchClass(self):
-        pass
+        param = input("Enter parameter to search on: ")
+        param = param.upper()
+        val = input("Enter value for parameter: ")
+
+        dbCursor.execute("""SELECT CRN, TITLE FROM COURSE WHERE ? = ?;""", (param, val))
+
+    def Log_out(self):
+        quit() #just end the program    
 
     def __repr__(self) -> str:
         return str(self.id) + ": " + self.fname + " " + self.lname
@@ -26,46 +34,98 @@ class student(user):
         super().__init__(fname, lname, id)
         self.schedule = list()
 
-    def addClass(self, crn):
+    def __init__(self, fname, lname, id, schedule):
+        super().__init__(fname, lname, id)
+        self.schedule = schedule
+
+    def addClass(self):
+        crn = input("Enter crn: ")
         self.schedule.append(crn)
 
-    def dropClass(self, crn):
+    def dropClass(self):
+        crn = input("Enter crn: ")
         try:
             self.schedule.remove(crn)
         except ValueError:
             print("Unable to remove class, class not found.")
 
-    def printRegClasses(self):
+    def Print_Registered_Classes(self):
         for i in self.schedule:
             print(f"{i}")
 
 class instructor(user):
     def __init__(self, fname, lname, id):
         super().__init__(fname, lname, id)
+        self.roster = list()
 
-    def __init__(self, fname, lname, id, schedule):
+    def __init__(self, fname, lname, id, roster):
         super().__init__(fname, lname, id)
-        self.schedule = schedule
+        self.roster = roster
 
-    def getClassList(self) -> str:
-        pass
+    def Print_Roster(self):
+        for i in self.roster:
+            print(f"{i}")
 
 class admin(user):
     def __init__(self, fname, lname, id):
         super().__init__(fname, lname, id)
 
-    def sysAddCourse(self, crs):
-        pass
+    def sysAddCourse(self):
+        crn = input("Enter Crn: ")
+        title = input("Enter title: ")
+        dept = input("Enter Department: ")
+        time = input("Enter Time: ")
+        dayofweek = input("Enter Days of the week: ")
+        semester = input("Enter semester: ")
+        try:
+            year = int(input("Enter Year: "))
+        except ValueError:
+            print("Invalid Input")
+            year = 0
+        try:
+            credits = int(input("Enter Credits: "))
+        except ValueError:
+            print("Invalid Input")
+            credits = 0
 
+        dbCursor.execute("""INSERT INTO COURSE VALUES (?, ?, ?, ?, ?, ?, ?, ?);""", (crn, title, dept, time, dayofweek, semester, year, credits))
+            
     def sysRemoveCourse(self):
         crn = input("Enter crn number to delete: ")
-        dbCursor.execute("""DELETE FROM COURSE WHERE CRN = ?;""", (crn))
+        dbCursor.execute("""DELETE FROM COURSE WHERE CRN = ?;""", (crn,))
 
-    def sysAddUser(self, user):
-        pass
+    def sysAddUser(self):
+        select = input("Enter user type (Student, Admin, Instructor): ")
 
-    def sysRemoveUser(slef, userID):
-        pass
+        name = input("Enter first name and last name: ")
+        name.split(" ", 2)
+        id = input("Enter user ID: ")
+        psd = input("Enter user password: ")
+
+        psdhash = hashlib.sha256()
+        psdhash.update(bytes(psd, 'utf-8')) #generate hash of password
+
+        if select == "Student":
+            dbCursor.execute("""INSERT INTO STUDENT VALUES (?, ?, ?, ?);""", (id, name[0], name[0], psdhash.digest()))
+        elif select == "Admin":
+            dbCursor.execute("""INSERT INTO ADMIN VALUES (?, ?, ?, ?);""", (id, name[0], name[0], psdhash.digest()))
+        elif select == "Instructor":
+            dbCursor.execute("""INSERT INTO INSTRUCTOR VALUES (?, ?, ?, ?);""", (id, name[0], name[0], psdhash.digest()))
+        else:
+            print("Invalid Input")
+
+    def sysRemoveUser(slef):
+        select = input("Enter user type (Student, Admin, Instructor): ")
+        id = input("Enter ID of user to remove: ")
+
+        if select == "Student":
+            dbCursor.execute("""DELETE FROM STUDENT WHERE USERID = ?;""", (id,))
+        elif select == "Admin":
+            dbCursor.execute("""DELETE FROM ADMIN WHERE USERID = ?;""", (id,))
+        elif select == "Instructor":
+            dbCursor.execute("""DELETE FROM INSTRUCTOR WHERE USERID = ?;""", (id,))
+        else:
+            print("Invalid Input")
 
 if __name__ == "__main__" :
     db = sqlite3.connect('database.db')
@@ -82,12 +142,17 @@ if __name__ == "__main__" :
         pass
 
     try:
-        dbCursor.execute("""CREATE TABLE STUDENT ( USERID INTEGER PRIMARY KEY, FNAME TEXT, LNAME TEXT, PASSWORDHASH BLOB);""")
+        dbCursor.execute("""CREATE TABLE STUDENT ( USERID INTEGER PRIMARY KEY, FNAME TEXT, LNAME TEXT, PASSWORDHASH BLOB, ENROLLEDCLASSES BLOB);""")
     except sqlite3.OperationalError:
         pass
         
     try:
-        dbCursor.execute("""CREATE TABLE INSTRUCTOR ( USERID INTEGER PRIMARY KEY, FNAME TEXT, LNAME TEXT, PASSWORDHASH BLOB);""")
+        dbCursor.execute("""CREATE TABLE INSTRUCTOR ( USERID INTEGER PRIMARY KEY, FNAME TEXT, LNAME TEXT, PASSWORDHASH BLOB, );""")
+    except sqlite3.OperationalError:
+        pass
+
+    try: #add default admin
+        dbCursor.execute("""INSERT INTO ADMIN VALUES (00000, "admin", "admin", ?);""", (b'\x8civ\xe5\xb5A\x04\x15\xbd\xe9\x08\xbdM\xee\x15\xdf\xb1g\xa9\xc8s\xfcK\xb8\xa8\x1fo*\xb4H\xa9\x18',))
     except sqlite3.OperationalError:
         pass
 
@@ -116,7 +181,7 @@ if __name__ == "__main__" :
             if len(search) == 0:
                 print("User does not exist in this system")
             else:
-                if (search[0] == psdhash.digest()):
+                if (search[0][0] == psdhash.digest()):
                     newUser = student(name[0], name[1], maxID)
                     notAuth = False #user is now authorized
                 else:
@@ -129,7 +194,7 @@ if __name__ == "__main__" :
             if len(search) == 0:
                 print("User does not exist in this system")
             else:
-                if (search[0] == psdhash.digest()):
+                if (search[0][0] == psdhash.digest()):
                     newUser = instructor(name[0], name[1], maxID)
                     notAuth = False #user is now authorized
                 else:
@@ -142,7 +207,7 @@ if __name__ == "__main__" :
             if len(search) == 0:
                 print("User does not exist in this system")
             else:
-                if (search[0] == psdhash.digest()):
+                if (search[0][0] == psdhash.digest()):
                     newUser = admin(name[0], name[1], maxID)
                     notAuth = False #user is now authorized
                 else:
@@ -166,6 +231,9 @@ if __name__ == "__main__" :
 
         #execute chosen method
         try: 
-            getattr(newUser, method_list[cmdNum])()
+            try:
+                getattr(newUser, method_list[cmdNum])()
+            except:
+                print("Error executing command")
         except IndexError:
             print("Command Selection out of range, try again")
