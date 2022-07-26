@@ -23,7 +23,17 @@ class user():
 
         dbCursor.execute("""SELECT CRN, TITLE FROM COURSE WHERE ? = ?;""", (param, val))
 
+        results = dbCursor.fetchall()
+
+        for i in results:
+            print(i)
+
+        if len(results) == 0:
+            print("No results found!")
+
     def Log_out(self):
+        db.commit()
+        db.close()
         quit() #just end the program    
 
     def __repr__(self) -> str:
@@ -61,6 +71,17 @@ class instructor(user):
     def __init__(self, fname, lname, id, roster):
         super().__init__(fname, lname, id)
         self.roster = roster
+
+    def addClass(self):
+        crn = input("Enter crn: ")
+        self.roster.append(crn)
+
+    def dropClass(self):
+        crn = input("Enter crn: ")
+        try:
+            self.roster.remove(crn)
+        except ValueError:
+            print("Unable to remove class, class not found.")
 
     def Print_Roster(self):
         for i in self.roster:
@@ -237,3 +258,6 @@ if __name__ == "__main__" :
                 print("Error executing command")
         except IndexError:
             print("Command Selection out of range, try again")
+
+    db.commit()
+    db.close()
