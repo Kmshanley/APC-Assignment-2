@@ -1,0 +1,6 @@
+ 
+ #Default Admin Account
+ try: 
+        dbCursor.execute("""INSERT INTO ADMIN VALUES (00005, "Amin", "damin", ?);""", (b'\x8civ\xe5\xb5A\x04\x15\xbd\xe9\x08\xbdM\xee\x15\xdf\xb1g\xa9\xc8s\xfcK\xb8\xa8\x1fo*\xb4H\xa9\x18',))
+    except sqlite3.OperationalError:
+        pass
