@@ -1,14 +1,15 @@
 import sqlite3
 import hashlib
+import pickle
 
-maxID = 1
-dbCursor = None #will be assigned in main
+loggedIn = True
 
 class user():
-    def __init__(self, fname, lname, id):
+    def __init__(self, fname, lname, id, cursor):
         self.fname  = fname
         self.lname = lname
         self.id = id
+        self.dbCursor = cursor
 
     def getName(self) -> str:
         print ("------Name-----")
@@ -21,9 +22,9 @@ class user():
         param = param.upper()
         val = input("Enter value for parameter: ")
 
-        dbCursor.execute("""SELECT CRN, TITLE FROM COURSE WHERE ? = ?;""", (param, val))
+        self.dbCursor.execute("""SELECT CRN, TITLE FROM COURSE WHERE ? = ?;""", (param, val))
 
-        results = dbCursor.fetchall()
+        results = self.dbCursor.fetchall()
 
         for i in results:
             print(i)
@@ -32,21 +33,20 @@ class user():
             print("No results found!")
 
     def Log_out(self):
-        db.commit()
-        db.close()
-        quit() #just end the program    
+        global loggedIn 
+        loggedIn = False
 
     def __repr__(self) -> str:
         return str(self.id) + ": " + self.fname + " " + self.lname
 
 class student(user):
-    def __init__(self, fname, lname, id):
-        super().__init__(fname, lname, id)
-        self.schedule = list()
-
-    def __init__(self, fname, lname, id, schedule):
-        super().__init__(fname, lname, id)
-        self.schedule = schedule
+    def __init__(self, fname, lname, id, cursor):
+        super().__init__(fname, lname, id, cursor)
+        self.dbCursor.execute("""SELECT ENROLLEDCLASSES FROM STUDENT WHERE USERID = ?;""", (self.id,))
+        res = self.dbCursor.fetchone()
+        self.schedule = pickle.loads(res[0])
+        if type(self.schedule) is not list:
+            raise ValueError
 
     def addClass(self):
         crn = input("Enter crn: ")
@@ -63,14 +63,19 @@ class student(user):
         for i in self.schedule:
             print(f"{i}")
 
-class instructor(user):
-    def __init__(self, fname, lname, id):
-        super().__init__(fname, lname, id)
-        self.roster = list()
+    def Save_Registered_Classes(self):
+        packedData = pickle.dumps(self.schedule)
+        self.dbCursor.execute("""UPDATE STUDENT SET ENROLLEDCLASSES = ? WHERE USERID = ?;""", (packedData, self.id))
+        print("Class list saved")
 
-    def __init__(self, fname, lname, id, roster):
-        super().__init__(fname, lname, id)
-        self.roster = roster
+class instructor(user):
+    def __init__(self, fname, lname, id, cursor):
+        super().__init__(fname, lname, id, cursor)
+        self.dbCursor.execute("""SELECT ROSTER FROM INSTRUCTOR WHERE USERID = ?;""", (self.id,))
+        res = self.dbCursor.fetchone()
+        self.roster = pickle.loads(res[0])
+        if type(self.roster) is not list:
+            raise ValueError
 
     def addClass(self):
         crn = input("Enter crn: ")
@@ -87,9 +92,14 @@ class instructor(user):
         for i in self.roster:
             print(f"{i}")
 
+    def Save_Roster(self):
+        packedData = pickle.dumps(self.roster)
+        self.dbCursor.execute("""UPDATE INSTRUCTOR SET ROSTER = ? WHERE USERID = ?;""", (packedData, self.id))
+        print("Roster Saved")
+
 class admin(user):
-    def __init__(self, fname, lname, id):
-        super().__init__(fname, lname, id)
+    def __init__(self, fname, lname, id, cursor):
+        super().__init__(fname, lname, id, cursor)
 
     def sysAddCourse(self):
         crn = input("Enter Crn: ")
@@ -109,17 +119,25 @@ class admin(user):
             print("Invalid Input")
             credits = 0
 
-        dbCursor.execute("""INSERT INTO COURSE VALUES (?, ?, ?, ?, ?, ?, ?, ?);""", (crn, title, dept, time, dayofweek, semester, year, credits))
+        self.dbCursor.execute("""INSERT INTO COURSE VALUES (?, ?, ?, ?, ?, ?, ?, ?);""", (crn, title, dept, time, dayofweek, semester, year, credits))
+        db.commit()
             
     def sysRemoveCourse(self):
         crn = input("Enter crn number to delete: ")
-        dbCursor.execute("""DELETE FROM COURSE WHERE CRN = ?;""", (crn,))
+        self.dbCursor.execute("""DELETE FROM COURSE WHERE CRN = ?;""", (crn,))
+        db.commit()
 
     def sysAddUser(self):
         select = input("Enter user type (Student, Admin, Instructor): ")
 
-        name = input("Enter first name and last name: ")
-        name.split(" ", 2)
+        while True:
+            name = input("Enter first name and last name: ")
+            name = name.split(" ", 2)
+            if len(name) == 2:
+                break #input is good
+            else:
+                print("Please enter your first and last name seperated by one space")
+
         id = input("Enter user ID: ")
         psd = input("Enter user password: ")
 
@@ -127,26 +145,28 @@ class admin(user):
         psdhash.update(bytes(psd, 'utf-8')) #generate hash of password
 
         if select == "Student":
-            dbCursor.execute("""INSERT INTO STUDENT VALUES (?, ?, ?, ?);""", (id, name[0], name[0], psdhash.digest()))
+            self.dbCursor.execute("""INSERT INTO STUDENT VALUES (?, ?, ?, ?, ?);""", (id, name[0], name[1], psdhash.digest(), pickle.dumps(list())))
         elif select == "Admin":
-            dbCursor.execute("""INSERT INTO ADMIN VALUES (?, ?, ?, ?);""", (id, name[0], name[0], psdhash.digest()))
+            self.dbCursor.execute("""INSERT INTO ADMIN VALUES (?, ?, ?, ?);""", (id, name[0], name[1], psdhash.digest()))
         elif select == "Instructor":
-            dbCursor.execute("""INSERT INTO INSTRUCTOR VALUES (?, ?, ?, ?);""", (id, name[0], name[0], psdhash.digest()))
+            self.dbCursor.execute("""INSERT INTO INSTRUCTOR VALUES (?, ?, ?, ?, ?);""", (id, name[0], name[1], psdhash.digest(), pickle.dumps(list())))
         else:
             print("Invalid Input")
+        db.commit()
 
-    def sysRemoveUser(slef):
+    def sysRemoveUser(self):
         select = input("Enter user type (Student, Admin, Instructor): ")
         id = input("Enter ID of user to remove: ")
 
         if select == "Student":
-            dbCursor.execute("""DELETE FROM STUDENT WHERE USERID = ?;""", (id,))
+            self.dbCursor.execute("""DELETE FROM STUDENT WHERE USERID = ?;""", (id,))
         elif select == "Admin":
-            dbCursor.execute("""DELETE FROM ADMIN WHERE USERID = ?;""", (id,))
+            self.dbCursor.execute("""DELETE FROM ADMIN WHERE USERID = ?;""", (id,))
         elif select == "Instructor":
-            dbCursor.execute("""DELETE FROM INSTRUCTOR WHERE USERID = ?;""", (id,))
+            self.dbCursor.execute("""DELETE FROM INSTRUCTOR WHERE USERID = ?;""", (id,))
         else:
             print("Invalid Input")
+        db.commit()
 
 if __name__ == "__main__" :
     db = sqlite3.connect('database.db')
@@ -168,13 +188,15 @@ if __name__ == "__main__" :
         pass
         
     try:
-        dbCursor.execute("""CREATE TABLE INSTRUCTOR ( USERID INTEGER PRIMARY KEY, FNAME TEXT, LNAME TEXT, PASSWORDHASH BLOB, );""")
+        dbCursor.execute("""CREATE TABLE INSTRUCTOR ( USERID INTEGER PRIMARY KEY, FNAME TEXT, LNAME TEXT, PASSWORDHASH BLOB, ROSTER BLOB);""")
     except sqlite3.OperationalError:
         pass
 
     try: #add default admin
         dbCursor.execute("""INSERT INTO ADMIN VALUES (00000, "admin", "admin", ?);""", (b'\x8civ\xe5\xb5A\x04\x15\xbd\xe9\x08\xbdM\xee\x15\xdf\xb1g\xa9\xc8s\xfcK\xb8\xa8\x1fo*\xb4H\xa9\x18',))
     except sqlite3.OperationalError:
+        pass
+    except sqlite3.IntegrityError: #this default admin user already exists
         pass
 
 
@@ -183,8 +205,13 @@ if __name__ == "__main__" :
     notAuth = True
 
     while notAuth:
-        name = input("Please enter your first name and last name: ")
-        name = name.split(" ", 2)
+        while True:
+            name = input("Please enter your first name and last name: ")
+            name = name.split(" ", 2)
+            if len(name) == 2:
+                break #input is good
+            else:
+                print("Please enter your first and last name seperated by one space")
 
         print("1. Student")
         print("2. Instructor")
@@ -203,7 +230,7 @@ if __name__ == "__main__" :
                 print("User does not exist in this system")
             else:
                 if (search[0][0] == psdhash.digest()):
-                    newUser = student(name[0], name[1], maxID)
+                    newUser = student(name[0], name[1], search[0][1], dbCursor)
                     notAuth = False #user is now authorized
                 else:
                     print("Wrong password")
@@ -216,7 +243,7 @@ if __name__ == "__main__" :
                 print("User does not exist in this system")
             else:
                 if (search[0][0] == psdhash.digest()):
-                    newUser = instructor(name[0], name[1], maxID)
+                    newUser = instructor(name[0], name[1], search[0][1], dbCursor)
                     notAuth = False #user is now authorized
                 else:
                     print("Wrong password")
@@ -229,17 +256,18 @@ if __name__ == "__main__" :
                 print("User does not exist in this system")
             else:
                 if (search[0][0] == psdhash.digest()):
-                    newUser = admin(name[0], name[1], maxID)
+                    newUser = admin(name[0], name[1], search[0][1], dbCursor)
                     notAuth = False #user is now authorized
                 else:
                     print("Wrong password")
         else: 
             newUser = None
 
+    loggedIn = True
     #string list of all methods in the user's chosen class
     method_list = [attribute for attribute in dir(newUser) if callable(getattr(newUser, attribute)) and attribute.startswith('__') is False]
     
-    while True:
+    while loggedIn:
         ct = 1
         #print the method list so the user can choose which method to execute
         for i in method_list:
@@ -251,13 +279,15 @@ if __name__ == "__main__" :
         cmdNum -= 1
 
         #execute chosen method
-        try: 
-            try:
-                getattr(newUser, method_list[cmdNum])()
-            except:
-                print("Error executing command")
-        except IndexError:
-            print("Command Selection out of range, try again")
+        getattr(newUser, method_list[cmdNum])()
+
+        #try: 
+        #    try:
+        #        getattr(newUser, method_list[cmdNum])()
+        #    except:
+        #        print("Error executing command")
+        #except IndexError:
+        #    print("Command Selection out of range, try again")
 
     db.commit()
     db.close()
