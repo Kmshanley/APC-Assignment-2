@@ -120,12 +120,10 @@ class admin(user):
             credits = 0
 
         self.dbCursor.execute("""INSERT INTO COURSE VALUES (?, ?, ?, ?, ?, ?, ?, ?);""", (crn, title, dept, time, dayofweek, semester, year, credits))
-        db.commit()
             
     def sysRemoveCourse(self):
         crn = input("Enter crn number to delete: ")
         self.dbCursor.execute("""DELETE FROM COURSE WHERE CRN = ?;""", (crn,))
-        db.commit()
 
     def sysAddUser(self):
         select = input("Enter user type (Student, Admin, Instructor): ")
@@ -152,7 +150,6 @@ class admin(user):
             self.dbCursor.execute("""INSERT INTO INSTRUCTOR VALUES (?, ?, ?, ?, ?);""", (id, name[0], name[1], psdhash.digest(), pickle.dumps(list())))
         else:
             print("Invalid Input")
-        db.commit()
 
     def sysRemoveUser(self):
         select = input("Enter user type (Student, Admin, Instructor): ")
@@ -166,7 +163,6 @@ class admin(user):
             self.dbCursor.execute("""DELETE FROM INSTRUCTOR WHERE USERID = ?;""", (id,))
         else:
             print("Invalid Input")
-        db.commit()
 
 if __name__ == "__main__" :
     db = sqlite3.connect('database.db')
