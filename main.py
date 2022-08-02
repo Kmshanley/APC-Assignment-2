@@ -123,7 +123,7 @@ class admin(user):
             
     def sysRemoveCourse(self):
         crn = input("Enter crn number to delete: ")
-        self.dbCursor.execute("""DELETE FROM COURSE WHERE CRN = ?;""", (crn,))
+        self.dbCursor.execute("""DELETE FROM COURSE WHERE CRN = ?;""", (int(crn),))
 
     def sysAddUser(self):
         select = input("Enter user type (Student, Admin, Instructor): ")
