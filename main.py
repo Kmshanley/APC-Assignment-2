@@ -153,7 +153,7 @@ class admin(user):
 
     def sysRemoveUser(self):
         select = input("Enter user type (Student, Admin, Instructor): ")
-        id = input("Enter ID of user to remove: ")
+        id = int(input("Enter ID of user to remove: "))
 
         if select == "Student":
             self.dbCursor.execute("""DELETE FROM STUDENT WHERE USERID = ?;""", (id,))
