@@ -38,7 +38,7 @@ def test_admin_add_remove_course():
 
     db.close()
 
-def test_admin_add_remove_course():
+def test_admin_add_remove_user():
     dbCursor, db = init_db()
     user_under_test = admin("admin", "admin", 1243124, dbCursor)
 
